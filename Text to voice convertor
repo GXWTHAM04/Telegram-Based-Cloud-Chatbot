@@ -1,0 +1,80 @@
+import os
+import telebot
+import speech_recognition as sr
+from pydub import AudioSegment
+from flask import Flask, request
+
+# Telegram Bot token
+TOKEN = 'your token'
+bot = telebot.TeleBot(TOKEN)
+server = Flask(__name__)
+
+# Ensure pydub can find ffmpeg (required for converting audio)
+AudioSegment.converter = "/usr/bin/ffmpeg"
+
+# Function to download voice file from Telegram
+def download_voice_file(file_id):
+    file_info = bot.get_file(file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    with open('voice.ogg', 'wb') as new_file:
+        new_file.write(downloaded_file)
+
+# Convert OGG to WAV using pydub
+def convert_ogg_to_wav(ogg_file, wav_file):
+    audio = AudioSegment.from_ogg(ogg_file)
+    audio.export(wav_file, format='wav')
+
+# Recognize speech from WAV file using Google Speech Recognition
+def recognize_speech(wav_file):
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(wav_file) as source:
+        audio_data = recognizer.record(source)
+        try:
+            return recognizer.recognize_google(audio_data)
+        except sr.UnknownValueError:
+            return "Sorry, I could not understand the audio."
+        except sr.RequestError:
+            return "Sorry, there was an error with the speech recognition service."
+
+# Handler for voice messages
+@bot.message_handler(content_types=['voice'])
+def handle_voice_message(message):
+    file_id = message.voice.file_id
+
+    # Download the voice message
+    download_voice_file(file_id)
+
+    ogg_file = 'voice.ogg'
+    wav_file = 'voice.wav'
+
+    # Convert the downloaded OGG file to WAV
+    convert_ogg_to_wav(ogg_file, wav_file)
+
+    # Perform speech-to-text conversion
+    text = recognize_speech(wav_file)
+
+    # Send the transcribed text back to the user
+    bot.send_message(message.chat.id, text)
+
+    # Clean up the files
+    os.remove(ogg_file)
+    os.remove(wav_file)
+
+# Webhook route to receive updates from Telegram
+@server.route('/' + TOKEN, methods=['POST'])
+def get_message():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "!", 200
+
+# Route to set up the webhook
+@server.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url='https://www.pythonanywhere.com/user/Gxwthamp123/files/home/Gxwthamp123/bot2.py?edit' + TOKEN)
+    return "Webhook set", 200
+
+# Flask application entry point (no need for server.run() in production)
+if __name__ == "__main__":
+  bot2.py(host="0.0.0.0", port=5000)
